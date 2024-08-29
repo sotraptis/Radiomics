@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import os
 import numpy as np
 import tensorflow as tf
@@ -122,7 +121,6 @@ if "results" not in st.session_state or st.session_state["results"] is None:
     show_home_page()
 else:
     show_results(st.session_state["uploaded_files"])
-=======
 import os
 import numpy as np
 import tensorflow as tf
@@ -246,4 +244,3 @@ if "results" not in st.session_state or st.session_state["results"] is None:
     show_home_page()
 else:
     show_results(st.session_state["uploaded_files"])
->>>>>>> 342d8d0d5a056a893e4c4f3abb03672dd6f18ddb
