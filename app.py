@@ -6,7 +6,7 @@ import random
 import streamlit as st
 
 # Ορισμός του πλήρους μονοπατιού για το μοντέλο
-model_path = r'C:\Users\yoave\Desktop\streamlit\best_model_fold_1.keras'
+model_path = 'best_model_fold_1.keras'
 model = tf.keras.models.load_model(model_path, compile=False)
 
 # Λειτουργία φόρτωσης και επεξεργασίας εικόνας DICOM
