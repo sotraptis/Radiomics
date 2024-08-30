@@ -13,7 +13,7 @@ def load_tflite_model(model_path):
     return interpreter
 
 # Ορισμός του πλήρους μονοπατιού για το TFLite μοντέλο
-model_path = r'C:\Users\yoave\Desktop\streamlit\best_model_fold_1.tflite'
+model_path = r'C:\Users\yoave\Desktop\streamlit - Αντιγραφή\best_model_fold_1.tflite'
 interpreter = load_tflite_model(model_path)
 
 # Λειτουργία φόρτωσης και επεξεργασίας εικόνας DICOM με χρήση cache
