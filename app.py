@@ -13,7 +13,7 @@ def load_tflite_model(model_path):
     return interpreter
 
 # Ορισμός του πλήρους μονοπατιού για το TFLite μοντέλο
-model_path = r'C:\Users\yoave\Desktop\streamlit - Αντιγραφή\best_model_fold_1.tflite'
+model_path = r'C:\Users\yoave\Desktop\streamlit\best_model_fold_1.tflite'
 interpreter = load_tflite_model(model_path)
 
 # Λειτουργία φόρτωσης και επεξεργασίας εικόνας DICOM με χρήση cache
@@ -65,7 +65,7 @@ def show_home_page():
 
 # Συνάρτηση για εμφάνιση της σελίδας αποτελεσμάτων
 def show_results(uploaded_files):
-    predictions = []
+    predictions = []  # Δημιουργία άδειας λίστας για αποθήκευση των αποτελεσμάτων
     shap_message = ""
 
     # Υπολογισμός μετρικών
@@ -77,14 +77,14 @@ def show_results(uploaded_files):
     for uploaded_file in uploaded_files:
         # Προετοιμασία και πρόβλεψη εικόνας
         image = process_image(uploaded_file)
-        predictions = predict_with_tflite(interpreter, image)
+        prediction = predict_with_tflite(interpreter, image)
 
         # Αντιστροφή πρόβλεψης
-        prediction_binary = (predictions < 0.5).astype(int)
+        prediction_binary = (prediction < 0.5).astype(int)
 
         # Ανάλυση αποτελεσμάτων
         prediction_label = 'Cancer' if prediction_binary == 1 else 'Healthy'
-        predictions.append((uploaded_file.name, prediction_label))
+        predictions.append((uploaded_file.name, prediction_label))  # Προσθήκη του αποτελέσματος στη λίστα
 
         # Εάν η πρόβλεψη είναι 'Cancer', δημιουργούμε το μήνυμα SHAP
         if prediction_label == 'Cancer':
