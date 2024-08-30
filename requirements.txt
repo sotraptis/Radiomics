@@ -1,6 +1,7 @@
 streamlit
-tensorflow
+tensorflow-cpu
 pydicom
 numpy
+
 
 

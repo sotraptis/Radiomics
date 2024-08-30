@@ -5,11 +5,19 @@ import pydicom
 import random
 import streamlit as st
 
-# Ορισμός του πλήρους μονοπατιού για το μοντέλο
-model_path = r'C:\Users\yoave\Desktop\streamlit\best_model_fold_1.keras'
-model = tf.keras.models.load_model(model_path, compile=False)
+# Χρησιμοποιούμε cache για τη φόρτωση του TFLite μοντέλου
+@st.cache_resource
+def load_tflite_model(model_path):
+    interpreter = tf.lite.Interpreter(model_path=model_path)
+    interpreter.allocate_tensors()
+    return interpreter
 
-# Λειτουργία φόρτωσης και επεξεργασίας εικόνας DICOM
+# Ορισμός του πλήρους μονοπατιού για το TFLite μοντέλο
+model_path = r'C:\Users\yoave\Desktop\streamlit\best_model_fold_1.tflite'
+interpreter = load_tflite_model(model_path)
+
+# Λειτουργία φόρτωσης και επεξεργασίας εικόνας DICOM με χρήση cache
+@st.cache_data
 def process_image(file):
     dicom = pydicom.dcmread(file)
     img = dicom.pixel_array
@@ -21,6 +29,16 @@ def process_image(file):
         img = np.repeat(img, 3, axis=-1)
     img = np.expand_dims(img, axis=0)  # Προσθήκη batch dimension
     return img
+
+# Συνάρτηση για την εκτέλεση πρόβλεψης με το TFLite μοντέλο
+def predict_with_tflite(interpreter, input_data):
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+
+    interpreter.set_tensor(input_details[0]['index'], input_data)
+    interpreter.invoke()
+    output_data = interpreter.get_tensor(output_details[0]['index'])
+    return output_data
 
 # Λίστα με τα χαρακτηριστικά που θα εμφανίζονται τυχαία
 shap_features = [
@@ -59,10 +77,10 @@ def show_results(uploaded_files):
     for uploaded_file in uploaded_files:
         # Προετοιμασία και πρόβλεψη εικόνας
         image = process_image(uploaded_file)
-        prediction = model.predict(image)
+        predictions = predict_with_tflite(interpreter, image)
 
         # Αντιστροφή πρόβλεψης
-        prediction_binary = (prediction < 0.5).astype(int)
+        prediction_binary = (predictions < 0.5).astype(int)
 
         # Ανάλυση αποτελεσμάτων
         prediction_label = 'Cancer' if prediction_binary == 1 else 'Healthy'
