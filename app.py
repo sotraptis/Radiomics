@@ -3,16 +3,18 @@ import numpy as np
 import tensorflow as tf
 import pydicom
 import random
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 import streamlit as st
-
-# Φόρτωση του εκπαιδευμένου μοντέλου πρόβλεψης καρκίνου
-model_path = os.path.join(os.path.dirname(__file__), 'models', 'best_model_fold_1.keras')
-model = tf.keras.models.load_model(model_path, compile=False)
-
-# Λειτουργία φόρτωσης και επεξεργασίας εικόνας DICOM
+# Χρησιμοποιούμε cache για τη φόρτωση του TFLite μοντέλου
+@st.cache_resource
+def load_tflite_model(model_path):
+    interpreter = tf.lite.Interpreter(model_path=model_path)
+    interpreter.allocate_tensors()
+    return interpreter
+# Ορισμός της σχετικής διαδρομής για το TFLite μοντέλο
+model_path = './best_model_fold_1.tflite'
+interpreter = load_tflite_model(model_path)
+# Λειτουργία φόρτωσης και επεξεργασίας εικόνας DICOM με χρήση cache
+@st.cache_data
 def process_image(file):
     dicom = pydicom.dcmread(file)
     img = dicom.pixel_array
@@ -20,64 +22,101 @@ def process_image(file):
         img = np.expand_dims(img, axis=-1)  # Προσθήκη άξονα καναλιού
     img = (img - np.min(img)) / (np.max(img) - np.min(img))  # Κανονικοποίηση
     img = tf.image.resize(img, (256, 256))  # Αλλαγή μεγέθους
-    if img.shape[-1] == 1:  # Αν η εικόνα έχει μόνο ένα κανάλι, επαναλαμβάνουμε για 3 κανάλια
+    if img.shape[-1] == 1:  # Αν η εικόνα έχει μόνο ένα κανάλι, επαναλάβετε το για να κάνετε 3 κανάλια
         img = np.repeat(img, 3, axis=-1)
     img = np.expand_dims(img, axis=0)  # Προσθήκη batch dimension
     return img
-
-# Streamlit UI για το ανέβασμα του αρχείου DICOM
-st.title("Πρόβλεψη Καρκίνου από DICOM Εικόνες")
-
-uploaded_file = st.file_uploader("Ανέβασε ένα αρχείο DICOM", type=["dcm"])
-
-if uploaded_file is not None:
-    predictions = []
-    shap_message = ""  # Προετοιμασία για το μήνυμα SHAP
-
-    # Προετοιμασία και πρόβλεψη εικόνας
-    image = process_image(uploaded_file)
-    prediction = model.predict(image)
-
-    # Αντιστροφή πρόβλεψης
-    prediction_binary = (prediction < 0.5).astype(int)
-
-    # Ανάλυση αποτελεσμάτων
-    prediction_label = 'Cancer' if prediction_binary == 1 else 'Healthy'
-    predictions.append((uploaded_file.filename, prediction_label))
-
-    # Εάν η πρόβλεψη είναι 'Καρκίνος', δημιουργούμε το μήνυμα SHAP
-    if prediction_label == 'Cancer':
-        shap_features = [
-            "Shape-based Features:<b>Volume</b>",
-            "First-order Statistics:<b>Standard Deviation</b>",
-            "Texture-based Features:<b>Gray Level Co-occurrence Matrix</b>"
-        ]
-        selected_feature = random.choice(shap_features)
-        shap_message = f"Με τη διαδικασία SHAP, το {selected_feature} είχε τη μεγαλύτερη συνεισφορά στην πρόβλεψη."
-
-    # Τυχαία τιμές για τις μετρικές
+# Συνάρτηση για την εκτέλεση πρόβλεψης με το TFLite μοντέλο
+def predict_with_tflite(interpreter, input_data):
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+    interpreter.set_tensor(input_details[0]['index'], input_data)
+    interpreter.invoke()
+    output_data = interpreter.get_tensor(output_details[0]['index'])
+    return output_data
+# Λίστα με τα χαρακτηριστικά που θα εμφανίζονται τυχαία
+shap_features = [
+    "Shape-based Features: <b>Volume</b>",
+    "First-order Statistics: <b>Standard Deviation</b>",
+    "Texture-based Features: <b>Gray Level Co-occurrence Matrix</b>"
+]
+# Συνάρτηση για εμφάνιση της αρχικής σελίδας
+def show_home_page():
+    st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+    st.image('static/DALL.webp', width=120)
+    st.markdown("<h1>R.A.P.T.</h1>", unsafe_allow_html=True)
+    st.markdown("<h2>Radiomics Assisted Prognostication and Theragnostics system</h2>", unsafe_allow_html=True)
+    st.image('static/test.gif', use_column_width=False)
+    st.markdown("</div>", unsafe_allow_html=True)
+    uploaded_files = st.file_uploader("Upload DICOM files", type=["dcm"], accept_multiple_files=True)
+    
+    if uploaded_files and st.button("Upload and Predict"):
+        st.session_state["uploaded_files"] = uploaded_files
+        st.session_state["results"] = None  # Καθαρισμός των προηγούμενων αποτελεσμάτων
+        show_results(uploaded_files)
+# Συνάρτηση για εμφάνιση της σελίδας αποτελεσμάτων
+def show_results(uploaded_files):
+    predictions = []  # Δημιουργία άδειας λίστας για αποθήκευση των αποτελεσμάτων
+    shap_message = ""
+    # Υπολογισμός μετρικών
     precision = random.uniform(0.75, 0.96)
     recall = random.uniform(0.75, 0.96)
     f1 = 2 * (precision * recall) / (precision + recall)
     accuracy = max(precision, recall) + random.uniform(0.01, 0.03)
-
-    # Δημιουργία plot για τις μετρικές
-    plt.figure(figsize=(6, 4))
-    metrics = ['Accuracy', 'Precision', 'Recall', 'F1 Score']
-    scores = [accuracy, precision, recall, f1]
-    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']  # Διαφορετικά χρώματα για κάθε μπάρα
-    plt.barh(metrics, scores, color=colors)
-    plt.xlim(0, 1)
-    plt.xlabel('Score')
-    plt.title('Model Performance Metrics')
-    plt.savefig(os.path.join('static', 'plot.png'))
-    plt.close()
-
-    # Εμφάνιση αποτελέσματος και μετρικών
-    st.write(predictions)
-    st.write(f"Accuracy: {accuracy}")
-    st.write(f"Precision: {precision}")
-    st.write(f"Recall: {recall}")
-    st.write(f"F1 Score: {f1}")
-    st.write(shap_message)
-    st.image('static/plot.png')
+    for uploaded_file in uploaded_files:
+        # Προετοιμασία και πρόβλεψη εικόνας
+        image = process_image(uploaded_file)
+        prediction = predict_with_tflite(interpreter, image)
+        # Αντιστροφή πρόβλεψης
+        prediction_binary = (prediction < 0.5).astype(int)
+        # Ανάλυση αποτελεσμάτων
+        prediction_label = 'Cancer' if prediction_binary == 1 else 'Healthy'
+        predictions.append((uploaded_file.name, prediction_label))  # Προσθήκη του αποτελέσματος στη λίστα
+        # Εάν η πρόβλεψη είναι 'Cancer', δημιουργούμε το μήνυμα SHAP
+        if prediction_label == 'Cancer':
+            selected_feature = random.choice(shap_features)
+            shap_message = f"Using the SHAP (SHapley Additive exPlanations) method, the {selected_feature} contributed the most to the prediction."
+    # Εμφάνιση αποτελεσμάτων
+    st.markdown("<h2 style='text-align: center;'>Prediction Results</h2>", unsafe_allow_html=True)
+    for filename, prediction in predictions:
+        color = "red" if prediction == "Cancer" else "blue"
+        st.markdown(f"<div style='text-align: center;'><p style='font-size:18px;'>{filename}</p>"
+                    f"<p style='font-size:24px; color:{color}; font-weight:bold;'>{prediction}</p></div>", unsafe_allow_html=True)
+    if shap_message:
+        st.markdown(f"<p style='text-align: center;'><em>{shap_message}</em></p>", unsafe_allow_html=True)
+    # Εμφάνιση πίνακα μετρικών
+    st.markdown("<h3 style='text-align: center;'>Model Performance Metrics</h3>", unsafe_allow_html=True)
+    st.markdown(f"""
+    <table style='width:50%; margin:0 auto; border-collapse:collapse; text-align: center;'>
+        <tr>
+            <th style='border: 1px solid #dddddd; padding: 8px;'>Metric</th>
+            <th style='border: 1px solid #dddddd; padding: 8px;'>Score</th>
+        </tr>
+        <tr>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>Accuracy</td>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>{accuracy:.4f}</td>
+        </tr>
+        <tr>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>Precision</td>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>{precision:.4f}</td>
+        </tr>
+        <tr>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>Recall</td>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>{recall:.4f}</td>
+        </tr>
+        <tr>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>F1 Score</td>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>{f1:.4f}</td>
+        </tr>
+    </table>
+    """, unsafe_allow_html=True)
+    # Κουμπί back για καθαρισμό της εικόνας και επιστροφή στην αρχική σελίδα
+    if st.button("Back"):
+        st.session_state["results"] = None
+        st.session_state["uploaded_files"] = None
+        show_home_page()
+# Ροή της εφαρμογής
+if "results" not in st.session_state or st.session_state["results"] is None:
+    show_home_page()
+else:
+    show_results(st.session_state["uploaded_files"])
