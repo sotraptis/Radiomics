@@ -34,6 +34,10 @@ def process_image(file):
     if 'TransferSyntaxUID' not in dicom.file_meta:
         dicom.file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian  # Προκαθορισμένο Transfer Syntax
 
+    # Έλεγχος αν υπάρχει δεδομένο Pixel Data
+    if not hasattr(dicom, 'PixelData'):
+        raise ValueError("Το αρχείο DICOM δεν περιέχει δεδομένα Pixel.")
+
     img = dicom.pixel_array
     if len(img.shape) == 2:  # Έλεγχος αν είναι 2D εικόνα
         img = np.expand_dims(img, axis=-1)  # Προσθήκη άξονα καναλιού
@@ -102,6 +106,7 @@ def show_results(uploaded_files):
         try:
             dicom_image = pydicom.dcmread(uploaded_file, force=True)
 
+            # Προσθήκη προκαθορισμένου Transfer Syntax UID αν δεν υπάρχει
             if 'TransferSyntaxUID' not in dicom_image.file_meta:
                 dicom_image.file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian  # Προκαθορισμένο Transfer Syntax
 
