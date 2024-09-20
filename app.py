@@ -98,7 +98,7 @@ def show_results(uploaded_files):
 
         # Εάν η πρόβλεψη είναι 'Cancer', εμφανίζουμε την περιοχή καρκίνου στην εικόνα
         if prediction_label == 'Cancer':
-            dicom_image = pydicom.dcmread(uploaded_file).pixel_array
+            dicom_image = pydicom.dcmread(uploaded_file, force=True).pixel_array
             cancer_image_path = overlay_cancer_area(dicom_image)  # Επικάλυψη περιοχής καρκίνου
             st.image(cancer_image_path, caption="Εικόνα με Περιοχή Καρκίνου", use_column_width=True)
             selected_feature = random.choice(shap_features)
