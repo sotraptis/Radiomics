@@ -35,7 +35,7 @@ def process_image(file):
         img = np.expand_dims(img, axis=-1)  # Προσθήκη άξονα καναλιού
     img = (img - np.min(img)) / (np.max(img) - np.min(img))  # Κανονικοποίηση
     img = tf.image.resize(img, (256, 256))  # Αλλαγή μεγέθους
-    if img.shape[-1] == 1:  # Αν η εικόνα έχει μόνο ένα κανάλι, επαναλάβετε το για να κάνετε 3 κανάλια
+    if img.shape[-1] == 1:  # Αν η εικόνα έχει μόνο ένα κανάλι, επαναλαμβάνεται για να γίνει 3 κανάλια
         img = np.repeat(img, 3, axis=-1)
     img = np.expand_dims(img, axis=0)  # Προσθήκη batch dimension
     return img
@@ -54,6 +54,10 @@ def segment_cancer_area(unet_model, dicom_image):
     # Αν η εικόνα έχει μόνο 2 διαστάσεις (ύψος, πλάτος), προσθέτουμε άξονα καναλιών (π.χ. grayscale -> (512, 512, 1))
     if len(dicom_image.shape) == 2:
         dicom_image = np.expand_dims(dicom_image, axis=-1)  # Προσθήκη καναλιού για grayscale
+
+    # Αν η εικόνα έχει μόνο 1 κανάλι, το επαναλαμβάνουμε για να έχει 3 κανάλια
+    if dicom_image.shape[-1] == 1:
+        dicom_image = np.repeat(dicom_image, 3, axis=-1)  # Μετατροπή σε "RGB" με 3 κανάλια
 
     # Αλλαγή μεγέθους της εικόνας για να ταιριάζει στις απαιτήσεις του U-Net (π.χ. 256x256)
     img_resized = tf.image.resize(dicom_image, (256, 256))
