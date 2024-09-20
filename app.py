@@ -106,28 +106,34 @@ def show_results(uploaded_files):
     for uploaded_file in uploaded_files:
         try:
             # Προετοιμασία και πρόβλεψη εικόνας
-            image = process_image(uploaded_file)
-            prediction = predict_with_tflite(interpreter, image)
-
-            # Αντιστροφή πρόβλεψης
-            prediction_binary = (prediction < 0.5).astype(int)
-            # Ανάλυση αποτελεσμάτων
-            prediction_label = 'Cancer' if prediction_binary == 1 else 'Healthy'
-            predictions.append((uploaded_file.name, prediction_label))  # Προσθήκη του αποτελέσματος στη λίστα
-
-            # Εάν η πρόβλεψη είναι 'Cancer', εμφανίζουμε την περιοχή καρκίνου στην εικόνα
             dicom_image = pydicom.dcmread(uploaded_file, force=True)
-            
+
             # Εκτύπωση βασικών πληροφοριών του DICOM αρχείου για debugging
             print(f"Dataset Description: {dicom_image}")
             
             if hasattr(dicom_image, 'PixelData'):
                 pixel_array = dicom_image.pixel_array
                 print(f"Pixel Array Shape: {pixel_array.shape}")  # Εκτύπωση του σχήματος της εικόνας για έλεγχο
-                cancer_image_path = segment_cancer_area(unet_model, pixel_array)  # Κάνουμε segmentation της περιοχής καρκίνου
-                st.image(cancer_image_path, caption="Εικόνα με Περιοχή Καρκίνου", use_column_width=True)
-                selected_feature = random.choice(shap_features)
-                shap_message = f"Using the SHAP (SHapley Additive exPlanations) method, the {selected_feature} contributed the most to the prediction."
+
+                # Έλεγχος αν η εικόνα έχει το κατάλληλο σχήμα (π.χ. 2D εικόνα)
+                if len(pixel_array.shape) == 2 or (len(pixel_array.shape) == 3 and pixel_array.shape[-1] in [1, 3]):
+                    # Κανονική επεξεργασία της εικόνας
+                    image = process_image(uploaded_file)
+                    prediction = predict_with_tflite(interpreter, image)
+
+                    # Αντιστροφή πρόβλεψης
+                    prediction_binary = (prediction < 0.5).astype(int)
+                    prediction_label = 'Cancer' if prediction_binary == 1 else 'Healthy'
+                    predictions.append((uploaded_file.name, prediction_label))  # Προσθήκη του αποτελέσματος στη λίστα
+
+                    # Εάν η πρόβλεψη είναι 'Cancer', εμφανίζουμε την περιοχή καρκίνου στην εικόνα
+                    cancer_image_path = segment_cancer_area(unet_model, pixel_array)  # Κάνουμε segmentation της περιοχής καρκίνου
+                    st.image(cancer_image_path, caption="Εικόνα με Περιοχή Καρκίνου", use_column_width=True)
+                    selected_feature = random.choice(shap_features)
+                    shap_message = f"Using the SHAP (SHapley Additive exPlanations) method, the {selected_feature} contributed the most to the prediction."
+                else:
+                    st.warning(f"Η εικόνα DICOM με όνομα {uploaded_file.name} έχει μη αναμενόμενο σχήμα {pixel_array.shape} και δεν μπορεί να επεξεργαστεί.")
+                    print(f"Skipping DICOM file with invalid shape: {pixel_array.shape}")
             else:
                 st.warning("Το αρχείο DICOM δεν περιέχει δεδομένα pixel και δεν μπορεί να εμφανιστεί.")
                 print("No PixelData found in the DICOM file.")
