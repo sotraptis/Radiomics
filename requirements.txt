@@ -2,8 +2,7 @@ streamlit
 tensorflow-cpu
 pydicom
 numpy
-opencv-python
-
+Pillow
 
 
 
