@@ -46,7 +46,7 @@ if uploaded_file is not None:
     predictions.append((uploaded_file.name, prediction_label))
 
     # Εάν η πρόβλεψη είναι 'Καρκίνος', δημιουργούμε το μήνυμα SHAP
-    if prediction_label == 'Καρκίνος':
+    if prediction_label == 'Cancer':
         shap_features = [
             "Shape-based Features:<b>Volume</b>",
             "First-order Statistics:<b>Standard Deviation</b>",
