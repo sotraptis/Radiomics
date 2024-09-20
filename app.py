@@ -69,8 +69,8 @@ shap_features = [
 def show_home_page():
     st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
     st.image('static/DALL.webp', width=120)
-    st.markdown("<h1>R.A.P.T.</h1>", unsafe_allow_html=True)
-    st.markdown("<h2>Radiomics Assisted Prognostication and Theragnostics system</h2>", unsafe_allow_html=True)
+    st.markdown("<h1>R.A.P.T.I.S</h1>", unsafe_allow_html=True)
+    st.markdown("<h2>Radiomics Assisted Prognostication Theragnostics and Intelligence System</h2>", unsafe_allow_html=True)
     st.image('static/test.gif', use_column_width=False)
     st.markdown("</div>", unsafe_allow_html=True)
     uploaded_files = st.file_uploader("Upload DICOM files", type=["dcm"], accept_multiple_files=True)
@@ -112,7 +112,37 @@ def show_results(uploaded_files):
                     f"<p style='font-size:24px; color:{color}; font-weight:bold;'>{prediction}</p></div>", unsafe_allow_html=True)
     if shap_message:
         st.markdown(f"<p style='text-align: center;'><em>{shap_message}</em></p>", unsafe_allow_html=True)
-
+    # Εμφάνιση πίνακα μετρικών
+    st.markdown("<h3 style='text-align: center;'>Model Performance Metrics</h3>", unsafe_allow_html=True)
+    st.markdown(f"""
+    <table style='width:50%; margin:0 auto; border-collapse:collapse; text-align: center;'>
+        <tr>
+            <th style='border: 1px solid #dddddd; padding: 8px;'>Metric</th>
+            <th style='border: 1px solid #dddddd; padding: 8px;'>Score</th>
+        </tr>
+        <tr>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>Accuracy</td>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>{accuracy:.4f}</td>
+        </tr>
+        <tr>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>Precision</td>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>{precision:.4f}</td>
+        </tr>
+        <tr>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>Recall</td>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>{recall:.4f}</td>
+        </tr>
+        <tr>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>F1 Score</td>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>{f1:.4f}</td>
+        </tr>
+    </table>
+    """, unsafe_allow_html=True)
+    # Κουμπί back για καθαρισμό της εικόνας και επιστροφή στην αρχική σελίδα
+    if st.button("Back"):
+        st.session_state["results"] = None
+        st.session_state["uploaded_files"] = None
+        show_home_page()
 # Ροή της εφαρμογής
 if "results" not in st.session_state or st.session_state["results"] is None:
     show_home_page()
