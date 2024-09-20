@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 # Φορτώνουμε ένα προεκπαιδευμένο μοντέλο U-Net για segmentation
 @st.cache_resource
 def load_unet_model():
-    # Χρησιμοποιούμε ένα μοντέλο U-Net που είναι προεκπαιδευμένο
+    # Χρησιμοποιούμε ένα μοντέλο U-Net που είναι προεκπαιδευμένο (προσαρμογή του MobileNetV2)
     unet_model = tf.keras.applications.MobileNetV2(weights='imagenet', include_top=False, input_shape=(256, 256, 3))
     return unet_model
 
@@ -49,19 +49,27 @@ def predict_with_tflite(interpreter, input_data):
     output_data = interpreter.get_tensor(output_details[0]['index'])
     return output_data
 
-# Συνάρτηση για να κάνουμε segmentation με U-Net και να εμφανίσουμε την περιοχή καρκίνου
+# Συνάρτηση για να κάνουμε segmentation με U-Net και να εμφανίσουμε τη σωστή περιοχή καρκίνου
 def segment_cancer_area(unet_model, dicom_image):
-    # Κάνουμε prediction με το U-Net μοντέλο για segmentation
+    # Αν η εικόνα έχει μόνο 2 διαστάσεις (ύψος, πλάτος), προσθέτουμε άξονα καναλιών (π.χ. grayscale -> (512, 512, 1))
+    if len(dicom_image.shape) == 2:
+        dicom_image = np.expand_dims(dicom_image, axis=-1)  # Προσθήκη καναλιού για grayscale
+
+    # Αλλαγή μεγέθους της εικόνας για να ταιριάζει στις απαιτήσεις του U-Net (π.χ. 256x256)
     img_resized = tf.image.resize(dicom_image, (256, 256))
+
+    # Προσθήκη batch dimension
     img_resized = np.expand_dims(img_resized, axis=0)
+
+    # Κάνουμε prediction με το U-Net μοντέλο για segmentation
     prediction = unet_model.predict(img_resized)
-    
-    # Επιστροφή της μάσκας
+
+    # Επιστροφή της μάσκας (0-1 binary mask)
     mask = prediction.squeeze() > 0.5  # Threshold για να πάρουμε τη μάσκα
 
     plt.figure(figsize=(6, 6))
-    plt.imshow(dicom_image[0], cmap='gray')
-    plt.imshow(mask, cmap='Reds', alpha=0.5)
+    plt.imshow(dicom_image.squeeze(), cmap='gray')  # Εμφάνιση της αρχικής εικόνας
+    plt.imshow(mask, cmap='Reds', alpha=0.5)  # Επικάλυψη της μάσκας
     plt.axis('off')
 
     # Αποθήκευση της εικόνας με την επικαλυπτόμενη μάσκα
