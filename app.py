@@ -98,11 +98,19 @@ def show_results(uploaded_files):
 
         # Εάν η πρόβλεψη είναι 'Cancer', εμφανίζουμε την περιοχή καρκίνου στην εικόνα
         if prediction_label == 'Cancer':
-            dicom_image = pydicom.dcmread(uploaded_file, force=True).pixel_array
+            dicom_image = pydicom.dcmread(uploaded_file, force=True)
             cancer_image_path = overlay_cancer_area(dicom_image)  # Επικάλυψη περιοχής καρκίνου
             st.image(cancer_image_path, caption="Εικόνα με Περιοχή Καρκίνου", use_column_width=True)
             selected_feature = random.choice(shap_features)
             shap_message = f"Using the SHAP (SHapley Additive exPlanations) method, the {selected_feature} contributed the most to the prediction."
+
+    # Έλεγχος αν το αρχείο περιέχει pixel data
+    if hasattr(dicom_image, 'PixelData'):
+        pixel_array = dicom_image.pixel_array
+        cancer_image_path = overlay_cancer_area(pixel_array)  # Επικάλυψη περιοχής καρκίνου
+        st.image(cancer_image_path, caption="Εικόνα με Περιοχή Καρκίνου", use_column_width=True)
+    else:
+    st.warning("Το αρχείο DICOM δεν περιέχει δεδομένα pixel και δεν μπορεί να εμφανιστεί.")
 
     # Εμφάνιση αποτελεσμάτων
     st.markdown("<h2 style='text-align: center;'>Prediction Results</h2>", unsafe_allow_html=True)
