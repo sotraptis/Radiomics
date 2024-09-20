@@ -104,26 +104,37 @@ def show_results(uploaded_files):
     shap_message = ""
 
     for uploaded_file in uploaded_files:
-        # Προετοιμασία και πρόβλεψη εικόνας
-        image = process_image(uploaded_file)
-        prediction = predict_with_tflite(interpreter, image)
+        try:
+            # Προετοιμασία και πρόβλεψη εικόνας
+            image = process_image(uploaded_file)
+            prediction = predict_with_tflite(interpreter, image)
 
-        # Αντιστροφή πρόβλεψης
-        prediction_binary = (prediction < 0.5).astype(int)
-        # Ανάλυση αποτελεσμάτων
-        prediction_label = 'Cancer' if prediction_binary == 1 else 'Healthy'
-        predictions.append((uploaded_file.name, prediction_label))  # Προσθήκη του αποτελέσματος στη λίστα
+            # Αντιστροφή πρόβλεψης
+            prediction_binary = (prediction < 0.5).astype(int)
+            # Ανάλυση αποτελεσμάτων
+            prediction_label = 'Cancer' if prediction_binary == 1 else 'Healthy'
+            predictions.append((uploaded_file.name, prediction_label))  # Προσθήκη του αποτελέσματος στη λίστα
 
-        # Εάν η πρόβλεψη είναι 'Cancer', εμφανίζουμε την περιοχή καρκίνου στην εικόνα
-        dicom_image = pydicom.dcmread(uploaded_file, force=True)
-        if hasattr(dicom_image, 'PixelData'):
-            pixel_array = dicom_image.pixel_array
-            cancer_image_path = segment_cancer_area(unet_model, pixel_array)  # Κάνουμε segmentation της περιοχής καρκίνου
-            st.image(cancer_image_path, caption="Εικόνα με Περιοχή Καρκίνου", use_column_width=True)
-            selected_feature = random.choice(shap_features)
-            shap_message = f"Using the SHAP (SHapley Additive exPlanations) method, the {selected_feature} contributed the most to the prediction."
-        else:
-            st.warning("Το αρχείο DICOM δεν περιέχει δεδομένα pixel και δεν μπορεί να εμφανιστεί.")
+            # Εάν η πρόβλεψη είναι 'Cancer', εμφανίζουμε την περιοχή καρκίνου στην εικόνα
+            dicom_image = pydicom.dcmread(uploaded_file, force=True)
+            
+            # Εκτύπωση βασικών πληροφοριών του DICOM αρχείου για debugging
+            print(f"Dataset Description: {dicom_image}")
+            
+            if hasattr(dicom_image, 'PixelData'):
+                pixel_array = dicom_image.pixel_array
+                print(f"Pixel Array Shape: {pixel_array.shape}")  # Εκτύπωση του σχήματος της εικόνας για έλεγχο
+                cancer_image_path = segment_cancer_area(unet_model, pixel_array)  # Κάνουμε segmentation της περιοχής καρκίνου
+                st.image(cancer_image_path, caption="Εικόνα με Περιοχή Καρκίνου", use_column_width=True)
+                selected_feature = random.choice(shap_features)
+                shap_message = f"Using the SHAP (SHapley Additive exPlanations) method, the {selected_feature} contributed the most to the prediction."
+            else:
+                st.warning("Το αρχείο DICOM δεν περιέχει δεδομένα pixel και δεν μπορεί να εμφανιστεί.")
+                print("No PixelData found in the DICOM file.")
+                
+        except Exception as e:
+            st.error(f"Σφάλμα κατά την επεξεργασία του αρχείου DICOM: {e}")
+            print(f"Error processing file: {uploaded_file.name}. Error: {e}")
 
     # Εμφάνιση αποτελεσμάτων
     st.markdown("<h2 style='text-align: center;'>Prediction Results</h2>", unsafe_allow_html=True)
