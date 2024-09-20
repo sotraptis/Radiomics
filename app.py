@@ -29,7 +29,7 @@ interpreter = load_tflite_model(model_path)
 # Λειτουργία φόρτωσης και επεξεργασίας εικόνας DICOM με χρήση cache
 @st.cache_data
 def process_image(file):
-    dicom = pydicom.dcmread(file)
+    dicom = pydicom.dcmread(file, force=True)  # Προσθέσαμε force=True για να διαβάζουμε ακόμη και αρχεία χωρίς το πρόθεμα DICM
     img = dicom.pixel_array
     if len(img.shape) == 2:  # Έλεγχος αν είναι 2D εικόνα
         img = np.expand_dims(img, axis=-1)  # Προσθήκη άξονα καναλιού
