@@ -5,6 +5,7 @@ import pydicom
 import random
 import streamlit as st
 import matplotlib.pyplot as plt
+from pydicom.uid import ImplicitVRLittleEndian, ExplicitVRLittleEndian, DeflatedExplicitVRLittleEndian
 
 # Φορτώνουμε ένα προεκπαιδευμένο μοντέλο U-Net για segmentation
 @st.cache_resource
@@ -25,28 +26,40 @@ def load_tflite_model(model_path):
 model_path = './best_model_fold_1.tflite'
 interpreter = load_tflite_model(model_path)
 
-# Λειτουργία φόρτωσης και επεξεργασίας εικόνας DICOM με χρήση cache
+# Λειτουργία φόρτωσης και επεξεργασίας εικόνας DICOM με έλεγχο Transfer Syntax
 @st.cache_data
 def process_image(file):
-    dicom = pydicom.dcmread(file, force=True)
-    
-    # Προσθήκη προκαθορισμένου Transfer Syntax UID αν δεν υπάρχει
-    if 'TransferSyntaxUID' not in dicom.file_meta:
-        dicom.file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian  # Προκαθορισμένο Transfer Syntax
+    try:
+        dicom = pydicom.dcmread(file, force=True)
 
-    # Έλεγχος αν υπάρχει δεδομένο Pixel Data
-    if not hasattr(dicom, 'PixelData'):
-        raise ValueError("Το αρχείο DICOM δεν περιέχει δεδομένα Pixel και δεν μπορεί να γίνει πρόβλεψη.")
+        # Έλεγχος και χειρισμός του TransferSyntaxUID
+        if 'TransferSyntaxUID' in dicom.file_meta:
+            ts_uid = dicom.file_meta.TransferSyntaxUID
+            st.write(f"Transfer Syntax UID: {ts_uid}")
+        else:
+            st.write("Δεν βρέθηκε Transfer Syntax UID, χρησιμοποιείται το προεπιλεγμένο Implicit VR Little Endian.")
+            dicom.file_meta.TransferSyntaxUID = ImplicitVRLittleEndian
+        
+        # Έλεγχος για συμβατότητα με υποστηριζόμενα Transfer Syntax
+        if dicom.file_meta.TransferSyntaxUID not in [ImplicitVRLittleEndian, ExplicitVRLittleEndian, DeflatedExplicitVRLittleEndian]:
+            raise ValueError(f"Το Transfer Syntax UID {dicom.file_meta.TransferSyntaxUID} δεν υποστηρίζεται.")
+        
+        # Έλεγχος αν υπάρχει δεδομένο Pixel Data
+        if not hasattr(dicom, 'PixelData'):
+            raise ValueError("Το αρχείο DICOM δεν περιέχει δεδομένα Pixel και δεν μπορεί να γίνει πρόβλεψη.")
 
-    img = dicom.pixel_array
-    if len(img.shape) == 2:  # Έλεγχος αν είναι 2D εικόνα
-        img = np.expand_dims(img, axis=-1)  # Προσθήκη άξονα καναλιού
-    img = (img - np.min(img)) / (np.max(img) - np.min(img))  # Κανονικοποίηση
-    img = tf.image.resize(img, (256, 256))  # Αλλαγή μεγέθους
-    if img.shape[-1] == 1:  # Αν η εικόνα έχει μόνο ένα κανάλι, επαναλαμβάνεται για να γίνει 3 κανάλια
-        img = np.repeat(img, 3, axis=-1)
-    img = np.expand_dims(img, axis=0)  # Προσθήκη batch dimension
-    return img
+        img = dicom.pixel_array
+        if len(img.shape) == 2:  # Έλεγχος αν είναι 2D εικόνα
+            img = np.expand_dims(img, axis=-1)  # Προσθήκη άξονα καναλιού
+        img = (img - np.min(img)) / (np.max(img) - np.min(img))  # Κανονικοποίηση
+        img = tf.image.resize(img, (256, 256))  # Αλλαγή μεγέθους
+        if img.shape[-1] == 1:  # Αν η εικόνα έχει μόνο ένα κανάλι, επαναλαμβάνεται για να γίνει 3 κανάλια
+            img = np.repeat(img, 3, axis=-1)
+        img = np.expand_dims(img, axis=0)  # Προσθήκη batch dimension
+        return img
+
+    except Exception as e:
+        raise ValueError(f"Σφάλμα κατά την επεξεργασία του αρχείου DICOM: {e}")
 
 # Συνάρτηση για την εκτέλεση πρόβλεψης με το TFLite μοντέλο
 def predict_with_tflite(interpreter, input_data):
@@ -106,9 +119,9 @@ def show_results(uploaded_files):
         try:
             dicom_image = pydicom.dcmread(uploaded_file, force=True)
 
-            # Προσθήκη προκαθορισμένου Transfer Syntax UID αν δεν υπάρχει
+            # Έλεγχος και χειρισμός του Transfer Syntax UID
             if 'TransferSyntaxUID' not in dicom_image.file_meta:
-                dicom_image.file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian  # Προκαθορισμένο Transfer Syntax
+                dicom_image.file_meta.TransferSyntaxUID = ImplicitVRLittleEndian  # Προκαθορισμένο Transfer Syntax
 
             if hasattr(dicom_image, 'PixelData'):
                 pixel_array = dicom_image.pixel_array
