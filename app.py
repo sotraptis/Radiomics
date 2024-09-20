@@ -41,13 +41,13 @@ def predict_with_tflite(interpreter, input_data):
     return output_data
 
 # Συνάρτηση για επικάλυψη της περιοχής καρκίνου στην εικόνα DICOM
-def overlay_cancer_area(dicom_image):
-    roi = np.zeros_like(dicom_image)  # Δημιουργία κενής μάσκας
-    h, w = dicom_image.shape
+def overlay_cancer_area(pixel_array):
+    roi = np.zeros_like(pixel_array)  # Δημιουργία κενής μάσκας
+    h, w = pixel_array.shape
     roi[h//4:h//2, w//4:w//2] = 1  # Προσθήκη χονδρικής περιοχής καρκίνου
 
     plt.figure(figsize=(6, 6))
-    plt.imshow(dicom_image, cmap='gray')
+    plt.imshow(pixel_array, cmap='gray')
     plt.imshow(roi, cmap='Reds', alpha=0.5)
     plt.axis('off')
 
@@ -97,20 +97,15 @@ def show_results(uploaded_files):
         predictions.append((uploaded_file.name, prediction_label))  # Προσθήκη του αποτελέσματος στη λίστα
 
         # Εάν η πρόβλεψη είναι 'Cancer', εμφανίζουμε την περιοχή καρκίνου στην εικόνα
-        if prediction_label == 'Cancer':
-            dicom_image = pydicom.dcmread(uploaded_file, force=True)
-            cancer_image_path = overlay_cancer_area(dicom_image)  # Επικάλυψη περιοχής καρκίνου
+        dicom_image = pydicom.dcmread(uploaded_file, force=True)
+        if hasattr(dicom_image, 'PixelData'):
+            pixel_array = dicom_image.pixel_array
+            cancer_image_path = overlay_cancer_area(pixel_array)  # Επικάλυψη περιοχής καρκίνου
             st.image(cancer_image_path, caption="Εικόνα με Περιοχή Καρκίνου", use_column_width=True)
             selected_feature = random.choice(shap_features)
             shap_message = f"Using the SHAP (SHapley Additive exPlanations) method, the {selected_feature} contributed the most to the prediction."
-
-    # Έλεγχος αν το αρχείο περιέχει pixel data
-    if hasattr(dicom_image, 'PixelData'):
-        pixel_array = dicom_image.pixel_array
-        cancer_image_path = overlay_cancer_area(pixel_array)  # Επικάλυψη περιοχής καρκίνου
-        st.image(cancer_image_path, caption="Εικόνα με Περιοχή Καρκίνου", use_column_width=True)
-    else:
-        st.warning("Το αρχείο DICOM δεν περιέχει δεδομένα pixel και δεν μπορεί να εμφανιστεί.")
+        else:
+            st.warning("Το αρχείο DICOM δεν περιέχει δεδομένα pixel και δεν μπορεί να εμφανιστεί.")
 
     # Εμφάνιση αποτελεσμάτων
     st.markdown("<h2 style='text-align: center;'>Prediction Results</h2>", unsafe_allow_html=True)
@@ -120,9 +115,10 @@ def show_results(uploaded_files):
                     f"<p style='font-size:24px; color:{color}; font-weight:bold;'>{prediction}</p></div>", unsafe_allow_html=True)
     if shap_message:
         st.markdown(f"<p style='text-align: center;'><em>{shap_message}</em></p>", unsafe_allow_html=True)
-    # Εμφάνιση πίνακα μετρικών
+    
+    # Εμφάνιση πίνακα μετρικών (για απλοποίηση δεν έχουμε ορίσει τιμές για accuracy, precision, recall, f1)
     st.markdown("<h3 style='text-align: center;'>Model Performance Metrics</h3>", unsafe_allow_html=True)
-    st.markdown(f"""
+    st.markdown("""
     <table style='width:50%; margin:0 auto; border-collapse:collapse; text-align: center;'>
         <tr>
             <th style='border: 1px solid #dddddd; padding: 8px;'>Metric</th>
@@ -130,27 +126,29 @@ def show_results(uploaded_files):
         </tr>
         <tr>
             <td style='border: 1px solid #dddddd; padding: 8px;'>Accuracy</td>
-            <td style='border: 1px solid #dddddd; padding: 8px;'>{accuracy:.4f}</td>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>N/A</td>
         </tr>
         <tr>
             <td style='border: 1px solid #dddddd; padding: 8px;'>Precision</td>
-            <td style='border: 1px solid #dddddd; padding: 8px;'>{precision:.4f}</td>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>N/A</td>
         </tr>
         <tr>
             <td style='border: 1px solid #dddddd; padding: 8px;'>Recall</td>
-            <td style='border: 1px solid #dddddd; padding: 8px;'>{recall:.4f}</td>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>N/A</td>
         </tr>
         <tr>
             <td style='border: 1px solid #dddddd; padding: 8px;'>F1 Score</td>
-            <td style='border: 1px solid #dddddd; padding: 8px;'>{f1:.4f}</td>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>N/A</td>
         </tr>
     </table>
     """, unsafe_allow_html=True)
+
     # Κουμπί back για καθαρισμό της εικόνας και επιστροφή στην αρχική σελίδα
     if st.button("Back"):
         st.session_state["results"] = None
         st.session_state["uploaded_files"] = None
         show_home_page()
+
 # Ροή της εφαρμογής
 if "results" not in st.session_state or st.session_state["results"] is None:
     show_home_page()
