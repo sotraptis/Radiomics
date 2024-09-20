@@ -107,7 +107,7 @@ def show_results(uploaded_files):
     # Εμφάνιση αποτελεσμάτων
     st.markdown("<h2 style='text-align: center;'>Prediction Results</h2>", unsafe_allow_html=True)
     for filename, prediction in predictions:
-        color = "red" αν prediction == "Cancer" αλλιώς "blue"
+        color = "red" if prediction == "Cancer" else "blue"
         st.markdown(f"<div style='text-align: center;'><p style='font-size:18px;'>{filename}</p>"
                     f"<p style='font-size:24px; color:{color}; font-weight:bold;'>{prediction}</p></div>", unsafe_allow_html=True)
     if shap_message:
