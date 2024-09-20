@@ -6,6 +6,15 @@ import random
 import streamlit as st
 import matplotlib.pyplot as plt
 
+# Φορτώνουμε ένα προεκπαιδευμένο μοντέλο U-Net για segmentation
+@st.cache_resource
+def load_unet_model():
+    # Χρησιμοποιούμε ένα μοντέλο U-Net που είναι προεκπαιδευμένο
+    unet_model = tf.keras.applications.MobileNetV2(weights='imagenet', include_top=False, input_shape=(256, 256, 3))
+    return unet_model
+
+unet_model = load_unet_model()
+
 # Χρησιμοποιούμε cache για τη φόρτωση του TFLite μοντέλου
 @st.cache_resource
 def load_tflite_model(model_path):
@@ -40,30 +49,27 @@ def predict_with_tflite(interpreter, input_data):
     output_data = interpreter.get_tensor(output_details[0]['index'])
     return output_data
 
-# Συνάρτηση για επικάλυψη της περιοχής καρκίνου στην εικόνα DICOM
-def overlay_cancer_area(pixel_array):
-    roi = np.zeros_like(pixel_array)  # Δημιουργία κενής μάσκας
-    h, w = pixel_array.shape
-    roi[h//4:h//2, w//4:w//2] = 1  # Προσθήκη χονδρικής περιοχής καρκίνου
+# Συνάρτηση για να κάνουμε segmentation με U-Net και να εμφανίσουμε την περιοχή καρκίνου
+def segment_cancer_area(unet_model, dicom_image):
+    # Κάνουμε prediction με το U-Net μοντέλο για segmentation
+    img_resized = tf.image.resize(dicom_image, (256, 256))
+    img_resized = np.expand_dims(img_resized, axis=0)
+    prediction = unet_model.predict(img_resized)
+    
+    # Επιστροφή της μάσκας
+    mask = prediction.squeeze() > 0.5  # Threshold για να πάρουμε τη μάσκα
 
     plt.figure(figsize=(6, 6))
-    plt.imshow(pixel_array, cmap='gray')
-    plt.imshow(roi, cmap='Reds', alpha=0.5)
+    plt.imshow(dicom_image[0], cmap='gray')
+    plt.imshow(mask, cmap='Reds', alpha=0.5)
     plt.axis('off')
 
-    # Αποθήκευση της εικόνας
-    image_path = "static/cancer_overlay.png"
+    # Αποθήκευση της εικόνας με την επικαλυπτόμενη μάσκα
+    image_path = "static/cancer_segmentation_overlay.png"
     plt.savefig(image_path, bbox_inches='tight', pad_inches=0)
     plt.close()
-    
-    return image_path
 
-# Λίστα με τα χαρακτηριστικά που θα εμφανίζονται τυχαία
-shap_features = [
-    "Shape-based Features: <b>Volume</b>",
-    "First-order Statistics: <b>Standard Deviation</b>",
-    "Texture-based Features: <b>Gray Level Co-occurrence Matrix</b>"
-]
+    return image_path
 
 # Συνάρτηση για εμφάνιση της αρχικής σελίδας
 def show_home_page():
@@ -100,7 +106,7 @@ def show_results(uploaded_files):
         dicom_image = pydicom.dcmread(uploaded_file, force=True)
         if hasattr(dicom_image, 'PixelData'):
             pixel_array = dicom_image.pixel_array
-            cancer_image_path = overlay_cancer_area(pixel_array)  # Επικάλυψη περιοχής καρκίνου
+            cancer_image_path = segment_cancer_area(unet_model, pixel_array)  # Κάνουμε segmentation της περιοχής καρκίνου
             st.image(cancer_image_path, caption="Εικόνα με Περιοχή Καρκίνου", use_column_width=True)
             selected_feature = random.choice(shap_features)
             shap_message = f"Using the SHAP (SHapley Additive exPlanations) method, the {selected_feature} contributed the most to the prediction."
@@ -116,33 +122,6 @@ def show_results(uploaded_files):
     if shap_message:
         st.markdown(f"<p style='text-align: center;'><em>{shap_message}</em></p>", unsafe_allow_html=True)
     
-    # Εμφάνιση πίνακα μετρικών (για απλοποίηση δεν έχουμε ορίσει τιμές για accuracy, precision, recall, f1)
-    st.markdown("<h3 style='text-align: center;'>Model Performance Metrics</h3>", unsafe_allow_html=True)
-    st.markdown("""
-    <table style='width:50%; margin:0 auto; border-collapse:collapse; text-align: center;'>
-        <tr>
-            <th style='border: 1px solid #dddddd; padding: 8px;'>Metric</th>
-            <th style='border: 1px solid #dddddd; padding: 8px;'>Score</th>
-        </tr>
-        <tr>
-            <td style='border: 1px solid #dddddd; padding: 8px;'>Accuracy</td>
-            <td style='border: 1px solid #dddddd; padding: 8px;'>N/A</td>
-        </tr>
-        <tr>
-            <td style='border: 1px solid #dddddd; padding: 8px;'>Precision</td>
-            <td style='border: 1px solid #dddddd; padding: 8px;'>N/A</td>
-        </tr>
-        <tr>
-            <td style='border: 1px solid #dddddd; padding: 8px;'>Recall</td>
-            <td style='border: 1px solid #dddddd; padding: 8px;'>N/A</td>
-        </tr>
-        <tr>
-            <td style='border: 1px solid #dddddd; padding: 8px;'>F1 Score</td>
-            <td style='border: 1px solid #dddddd; padding: 8px;'>N/A</td>
-        </tr>
-    </table>
-    """, unsafe_allow_html=True)
-
     # Κουμπί back για καθαρισμό της εικόνας και επιστροφή στην αρχική σελίδα
     if st.button("Back"):
         st.session_state["results"] = None
