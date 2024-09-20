@@ -36,7 +36,7 @@ def process_image(file):
 
     # Έλεγχος αν υπάρχει δεδομένο Pixel Data
     if not hasattr(dicom, 'PixelData'):
-        raise ValueError("Το αρχείο DICOM δεν περιέχει δεδομένα Pixel.")
+        raise ValueError("Το αρχείο DICOM δεν περιέχει δεδομένα Pixel και δεν μπορεί να γίνει πρόβλεψη.")
 
     img = dicom.pixel_array
     if len(img.shape) == 2:  # Έλεγχος αν είναι 2D εικόνα
@@ -130,7 +130,7 @@ def show_results(uploaded_files):
                 else:
                     st.warning(f"Η εικόνα DICOM με όνομα {uploaded_file.name} έχει μη αναμενόμενο σχήμα {pixel_array.shape} και δεν μπορεί να επεξεργαστεί.")
             else:
-                st.warning("Το αρχείο DICOM δεν περιέχει δεδομένα pixel και δεν μπορεί να εμφανιστεί.")
+                st.warning(f"Το αρχείο DICOM με όνομα {uploaded_file.name} δεν περιέχει δεδομένα Pixel και δεν μπορεί να γίνει πρόβλεψη.")
                 
         except Exception as e:
             st.error(f"Σφάλμα κατά την επεξεργασία του αρχείου DICOM: {e}")
