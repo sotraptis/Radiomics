@@ -42,8 +42,8 @@ if uploaded_file is not None:
     prediction_binary = (prediction < 0.5).astype(int)
 
     # Ανάλυση αποτελεσμάτων
-    prediction_label = 'Καρκίνος' αν prediction_binary == 1 αλλιώς 'Υγιές'
-    predictions.append((uploaded_file.name, prediction_label))
+    prediction_label = 'Cancer' if prediction_binary == 1 else 'Healthy'
+    predictions.append((uploaded_file.filename, prediction_label))
 
     # Εάν η πρόβλεψη είναι 'Καρκίνος', δημιουργούμε το μήνυμα SHAP
     if prediction_label == 'Cancer':
