@@ -110,7 +110,7 @@ def show_results(uploaded_files):
         cancer_image_path = overlay_cancer_area(pixel_array)  # Επικάλυψη περιοχής καρκίνου
         st.image(cancer_image_path, caption="Εικόνα με Περιοχή Καρκίνου", use_column_width=True)
     else:
-    st.warning("Το αρχείο DICOM δεν περιέχει δεδομένα pixel και δεν μπορεί να εμφανιστεί.")
+        st.warning("Το αρχείο DICOM δεν περιέχει δεδομένα pixel και δεν μπορεί να εμφανιστεί.")
 
     # Εμφάνιση αποτελεσμάτων
     st.markdown("<h2 style='text-align: center;'>Prediction Results</h2>", unsafe_allow_html=True)
