@@ -32,19 +32,15 @@ def process_image(file):
     try:
         dicom = pydicom.dcmread(file, force=True)
 
-        # Έλεγχος και χειρισμός του Transfer Syntax UID
+        # Χρήση του Transfer Syntax UID εάν δεν υπάρχει
         if 'TransferSyntaxUID' not in dicom.file_meta:
             st.warning("Δεν βρέθηκε Transfer Syntax UID, χρησιμοποιείται το προεπιλεγμένο Implicit VR Little Endian.")
             dicom.file_meta.TransferSyntaxUID = ImplicitVRLittleEndian
 
-        if dicom.file_meta.TransferSyntaxUID not in [ImplicitVRLittleEndian, ExplicitVRLittleEndian, DeflatedExplicitVRLittleEndian]:
-            raise ValueError(f"Το Transfer Syntax UID {dicom.file_meta.TransferSyntaxUID} δεν υποστηρίζεται.")
-
-        # Έλεγχος για την ύπαρξη δεδομένων Pixel
+        # Χρήση του pixel_array ανεξάρτητα από τα μεταδεδομένα
         if not hasattr(dicom, 'PixelData'):
             raise ValueError("Το αρχείο DICOM δεν περιέχει δεδομένα Pixel και δεν μπορεί να γίνει πρόβλεψη.")
 
-        # Λήψη του pixel_array
         try:
             img = dicom.pixel_array
         except Exception as e:
@@ -162,15 +158,4 @@ def show_results(uploaded_files):
         st.markdown(f"<div style='text-align: center;'><p style='font-size:18px;'>{filename}</p>"
                     f"<p style='font-size:24px; color:{color}; font-weight:bold;'>{prediction}</p></div>", unsafe_allow_html=True)
     if shap_message:
-        st.markdown(f"<p style='text-align: center;'><em>{shap_message}</em></p>", unsafe_allow_html=True)
-
-    if st.button("Back"):
-        st.session_state["results"] = None
-        st.session_state["uploaded_files"] = None
-        show_home_page()
-
-# Ροή της εφαρμογής
-if "results" not in st.session_state or st.session_state["results"] is None:
-    show_home_page()
-else:
-    show_results(st.session_state["uploaded_files"])
+        st.mark
