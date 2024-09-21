@@ -29,9 +29,9 @@ interpreter = load_tflite_model(model_path)
 @st.cache_data
 def process_image(file):
     try:
-        # Ανάγνωση μεμονωμένου DICOM αρχείου με SimpleITK
-        dicom_image = sitk.ReadImage(file)  # Διαβάζουμε το αρχείο
-        img_array = sitk.GetArrayFromImage(dicom_image)  # Μετατρέπουμε την εικόνα σε numpy array
+        # Χρήση του sitk.ReadFile() για ανάγνωση μεμονωμένου DICOM αρχείου
+        dicom_image = sitk.ReadImage(file)  # Χρήση ReadImage για ανάγνωση μεμονωμένου αρχείου DICOM
+        img_array = sitk.GetArrayFromImage(dicom_image)  # Μετατροπή σε numpy array
         
         # Έλεγχος αν η εικόνα είναι 2D ή 3D
         if len(img_array.shape) == 3:
