@@ -1,11 +1,10 @@
 import os
 import numpy as np
 import tensorflow as tf
-import pydicom
+import SimpleITK as sitk
 import random
 import streamlit as st
 import matplotlib.pyplot as plt
-from pydicom.uid import ImplicitVRLittleEndian
 
 # Φορτώνουμε το U-Net μοντέλο
 @st.cache_resource
@@ -26,43 +25,33 @@ def load_tflite_model(model_path):
 model_path = './best_model_fold_1.tflite'
 interpreter = load_tflite_model(model_path)
 
-# Επεξεργασία της εικόνας DICOM
+# Επεξεργασία της εικόνας DICOM με SimpleITK
 @st.cache_data
 def process_image(file):
     try:
-        dicom = pydicom.dcmread(file, force=True)
-
-        # Έλεγχος και ρύθμιση του Transfer Syntax UID
-        if 'TransferSyntaxUID' not in dicom.file_meta:
-            st.warning("Δεν βρέθηκε Transfer Syntax UID, χρησιμοποιείται το προεπιλεγμένο Implicit VR Little Endian.")
-            dicom.file_meta.TransferSyntaxUID = ImplicitVRLittleEndian
-
-        # Προσπάθεια ανάγνωσης του Pixel Data
-        if not hasattr(dicom, 'PixelData') or dicom.PixelData is None:
-            raise ValueError("Το αρχείο DICOM δεν περιέχει δεδομένα Pixel και δεν μπορεί να γίνει πρόβλεψη.")
-
-        # Ανάγνωση και κανονικοποίηση του pixel_array
-        img = dicom.pixel_array
-        st.write(f"Σχήμα pixel_array: {img.shape}")
-
-        if len(img.shape) == 2:  # Αν είναι 2D εικόνα
-            img = np.expand_dims(img, axis=-1)  # Προσθήκη καναλιού
-
+        # Ανάγνωση DICOM αρχείου με SimpleITK
+        dicom_image = sitk.ReadImage(file)
+        img_array = sitk.GetArrayFromImage(dicom_image)
+        
+        # Έλεγχος αν η εικόνα είναι 2D ή 3D
+        if len(img_array.shape) == 3:
+            img_array = img_array[0]  # Αν είναι 3D, χρησιμοποιούμε το πρώτο κανάλι
+        
         # Κανονικοποίηση και αλλαγή μεγέθους
-        img = (img - np.min(img)) / (np.max(img) - np.min(img))
+        img = (img_array - np.min(img_array)) / (np.max(img_array) - np.min(img_array))
         img = tf.image.resize(img, (256, 256))
 
-        if img.shape[-1] == 1:  # Αν έχει μόνο ένα κανάλι, επαναλαμβάνεται για να γίνει 3 κανάλια
+        # Μετατροπή σε 3 κανάλια αν είναι ασπρόμαυρη
+        if len(img.shape) == 2:
+            img = np.expand_dims(img, axis=-1)
+        if img.shape[-1] == 1:
             img = np.repeat(img, 3, axis=-1)
 
         img = np.expand_dims(img, axis=0)  # Προσθήκη batch dimension
         return img
 
-    except ValueError as ve:
-        st.error(f"Σφάλμα: {ve}")
-        raise
     except Exception as e:
-        raise ValueError(f"Άλλο σφάλμα κατά την επεξεργασία του αρχείου DICOM: {e}")
+        raise ValueError(f"Σφάλμα κατά την επεξεργασία του αρχείου DICOM με SimpleITK: {e}")
 
 # Εκτέλεση πρόβλεψης με το TFLite μοντέλο
 def predict_with_tflite(interpreter, input_data):
@@ -120,37 +109,30 @@ def show_results(uploaded_files):
 
     for uploaded_file in uploaded_files:
         try:
-            dicom_image = pydicom.dcmread(uploaded_file, force=True)
+            # Ανάγνωση της εικόνας DICOM με SimpleITK
+            dicom_image = sitk.ReadImage(uploaded_file)
+            pixel_array = sitk.GetArrayFromImage(dicom_image)
 
-            # Έλεγχος και χειρισμός του Transfer Syntax UID
-            if 'TransferSyntaxUID' not in dicom_image.file_meta:
-                dicom_image.file_meta.TransferSyntaxUID = ImplicitVRLittleEndian  # Προκαθορισμένο Transfer Syntax
+            st.write(f"Pixel Array Shape: {pixel_array.shape}")
 
-            if hasattr(dicom_image, 'PixelData'):
-                pixel_array = dicom_image.pixel_array
-                st.write(f"Pixel Array Shape: {pixel_array.shape}")
+            if len(pixel_array.shape) == 2 or (len(pixel_array.shape) == 3 and pixel_array.shape[-1] in [1, 3]):
+                image = process_image(uploaded_file)
+                prediction = predict_with_tflite(interpreter, image)
 
-                if len(pixel_array.shape) == 2 or (len(pixel_array.shape) == 3 and pixel_array.shape[-1] in [1, 3]):
-                    image = process_image(uploaded_file)
-                    prediction = predict_with_tflite(interpreter, image)
+                prediction_binary = (prediction < 0.5).astype(int)
+                prediction_label = 'Cancer' if prediction_binary == 1 else 'Healthy'
+                predictions.append((uploaded_file.name, prediction_label))
 
-                    prediction_binary = (prediction < 0.5).astype(int)
-                    prediction_label = 'Cancer' if prediction_binary == 1 else 'Healthy'
-                    predictions.append((uploaded_file.name, prediction_label))
-
-                    if prediction_label == 'Cancer':
-                        cancer_image_path = segment_cancer_area(unet_model, pixel_array)
-                        st.image(cancer_image_path, caption="Εικόνα με Περιοχή Καρκίνου", use_column_width=True)
-                        selected_feature = random.choice(shap_features)
-                        shap_message = f"Using the SHAP (SHapley Additive exPlanations) method, the {selected_feature} contributed the most to the prediction."
-                else:
-                    st.warning(f"Η εικόνα DICOM με όνομα {uploaded_file.name} έχει μη αναμενόμενο σχήμα {pixel_array.shape} και δεν μπορεί να επεξεργαστεί.")
+                if prediction_label == 'Cancer':
+                    cancer_image_path = segment_cancer_area(unet_model, pixel_array)
+                    st.image(cancer_image_path, caption="Εικόνα με Περιοχή Καρκίνου", use_column_width=True)
+                    selected_feature = random.choice(shap_features)
+                    shap_message = f"Using the SHAP (SHapley Additive exPlanations) method, the {selected_feature} contributed the most to the prediction."
             else:
-                st.warning(f"Το αρχείο DICOM με όνομα {uploaded_file.name} δεν περιέχει δεδομένα Pixel και δεν μπορεί να γίνει πρόβλεψη.")
+                st.warning(f"Η εικόνα DICOM με όνομα {uploaded_file.name} έχει μη αναμενόμενο σχήμα {pixel_array.shape} και δεν μπορεί να επεξεργαστεί.")
                 
         except Exception as e:
-            st.error(f"Σφάλμα κατά την επεξεργασία του αρχείου DICOM: {e}")
-            print(f"Error processing file: {uploaded_file.name}. Error: {e}")
+            st.error(f"Σφάλμα κατά την επεξεργασία του αρχείου DICOM με SimpleITK: {e}")
 
     st.markdown("<h2 style='text-align: center;'>Prediction Results</h2>", unsafe_allow_html=True)
     for filename, prediction in predictions:
