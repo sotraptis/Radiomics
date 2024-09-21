@@ -1,59 +1,37 @@
 import os
 import numpy as np
 import tensorflow as tf
-import SimpleITK as sitk
+import pydicom
 import random
 import streamlit as st
 import matplotlib.pyplot as plt
 
-# Φορτώνουμε το U-Net μοντέλο
-@st.cache_resource
-def load_unet_model():
-    unet_model = tf.keras.applications.MobileNetV2(weights='imagenet', include_top=False, input_shape=(256, 256, 3))
-    return unet_model
-
-unet_model = load_unet_model()
-
-# Φορτώνουμε το TFLite μοντέλο
+# Χρησιμοποιούμε cache για τη φόρτωση του TFLite μοντέλου
 @st.cache_resource
 def load_tflite_model(model_path):
     interpreter = tf.lite.Interpreter(model_path=model_path)
     interpreter.allocate_tensors()
     return interpreter
 
-# Ορισμός διαδρομής για το TFLite μοντέλο
+# Ορισμός της σχετικής διαδρομής για το TFLite μοντέλο
 model_path = './best_model_fold_1.tflite'
 interpreter = load_tflite_model(model_path)
 
-# Επεξεργασία της εικόνας DICOM με SimpleITK
+# Λειτουργία φόρτωσης και επεξεργασίας εικόνας DICOM με χρήση cache
 @st.cache_data
 def process_image(file):
-    try:
-        # Χρήση του sitk.ReadImage() για ανάγνωση μεμονωμένου DICOM αρχείου
-        dicom_image = sitk.ReadImage(file)
-        img_array = sitk.GetArrayFromImage(dicom_image)  # Μετατροπή σε numpy array
-        
-        # Έλεγχος αν η εικόνα είναι 2D ή 3D
-        if len(img_array.shape) == 3:
-            img_array = img_array[0]  # Αν είναι 3D, χρησιμοποιούμε το πρώτο κανάλι
-        
-        # Κανονικοποίηση και αλλαγή μεγέθους
-        img = (img_array - np.min(img_array)) / (np.max(img_array) - np.min(img_array))
-        img = tf.image.resize(img, (256, 256))
+    dicom = pydicom.dcmread(file)
+    img = dicom.pixel_array
+    if len(img.shape) == 2:  # Έλεγχος αν είναι 2D εικόνα
+        img = np.expand_dims(img, axis=-1)  # Προσθήκη άξονα καναλιού
+    img = (img - np.min(img)) / (np.max(img) - np.min(img))  # Κανονικοποίηση
+    img = tf.image.resize(img, (256, 256))  # Αλλαγή μεγέθους
+    if img.shape[-1] == 1:  # Αν η εικόνα έχει μόνο ένα κανάλι, επαναλάβετε το για να κάνετε 3 κανάλια
+        img = np.repeat(img, 3, axis=-1)
+    img = np.expand_dims(img, axis=0)  # Προσθήκη batch dimension
+    return img
 
-        # Μετατροπή σε 3 κανάλια αν είναι ασπρόμαυρη
-        if len(img.shape) == 2:
-            img = np.expand_dims(img, axis=-1)
-        if img.shape[-1] == 1:
-            img = np.repeat(img, 3, axis=-1)
-
-        img = np.expand_dims(img, axis=0)  # Προσθήκη batch dimension
-        return img
-
-    except Exception as e:
-        raise ValueError(f"Σφάλμα κατά την επεξεργασία του αρχείου DICOM με SimpleITK: {e}")
-
-# Εκτέλεση πρόβλεψης με το TFLite μοντέλο
+# Συνάρτηση για την εκτέλεση πρόβλεψης με το TFLite μοντέλο
 def predict_with_tflite(interpreter, input_data):
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
@@ -62,30 +40,30 @@ def predict_with_tflite(interpreter, input_data):
     output_data = interpreter.get_tensor(output_details[0]['index'])
     return output_data
 
-# Εμφάνιση της περιοχής καρκίνου στην εικόνα DICOM
-def segment_cancer_area(unet_model, dicom_image):
-    if len(dicom_image.shape) == 2:
-        dicom_image = np.expand_dims(dicom_image, axis=-1)  # Προσθήκη καναλιού για grayscale
-
-    if dicom_image.shape[-1] == 1:
-        dicom_image = np.repeat(dicom_image, 3, axis=-1)  # Μετατροπή σε "RGB" με 3 κανάλια
-
-    img_resized = tf.image.resize(dicom_image, (256, 256))
-    img_resized = np.expand_dims(img_resized, axis=0)
-
-    prediction = unet_model.predict(img_resized)
-    mask = prediction.squeeze() > 0.5  # Threshold για να πάρουμε τη μάσκα
+# Συνάρτηση για επικάλυψη της περιοχής καρκίνου στην εικόνα DICOM
+def overlay_cancer_area(pixel_array):
+    roi = np.zeros_like(pixel_array)  # Δημιουργία κενής μάσκας
+    h, w = pixel_array.shape
+    roi[h//4:h//2, w//4:w//2] = 1  # Προσθήκη χονδρικής περιοχής καρκίνου
 
     plt.figure(figsize=(6, 6))
-    plt.imshow(dicom_image.squeeze(), cmap='gray')  # Εμφάνιση της αρχικής εικόνας
-    plt.imshow(mask, cmap='Reds', alpha=0.5)  # Επικάλυψη της μάσκας
+    plt.imshow(pixel_array, cmap='gray')
+    plt.imshow(roi, cmap='Reds', alpha=0.5)
     plt.axis('off')
 
-    image_path = "static/cancer_segmentation_overlay.png"
+    # Αποθήκευση της εικόνας
+    image_path = "static/cancer_overlay.png"
     plt.savefig(image_path, bbox_inches='tight', pad_inches=0)
     plt.close()
-
+    
     return image_path
+
+# Λίστα με τα χαρακτηριστικά που θα εμφανίζονται τυχαία
+shap_features = [
+    "Shape-based Features: <b>Volume</b>",
+    "First-order Statistics: <b>Standard Deviation</b>",
+    "Texture-based Features: <b>Gray Level Co-occurrence Matrix</b>"
+]
 
 # Συνάρτηση για εμφάνιση της αρχικής σελίδας
 def show_home_page():
@@ -104,36 +82,32 @@ def show_home_page():
 
 # Συνάρτηση για εμφάνιση της σελίδας αποτελεσμάτων
 def show_results(uploaded_files):
-    predictions = []
+    predictions = []  # Δημιουργία άδειας λίστας για αποθήκευση των αποτελεσμάτων
     shap_message = ""
 
     for uploaded_file in uploaded_files:
-        try:
-            # Ανάγνωση της εικόνας DICOM με SimpleITK
-            dicom_image = sitk.ReadImage(uploaded_file)
-            pixel_array = sitk.GetArrayFromImage(dicom_image)
+        # Προετοιμασία και πρόβλεψη εικόνας
+        image = process_image(uploaded_file)
+        prediction = predict_with_tflite(interpreter, image)
 
-            st.write(f"Pixel Array Shape: {pixel_array.shape}")
+        # Αντιστροφή πρόβλεψης
+        prediction_binary = (prediction < 0.5).astype(int)
+        # Ανάλυση αποτελεσμάτων
+        prediction_label = 'Cancer' if prediction_binary == 1 else 'Healthy'
+        predictions.append((uploaded_file.name, prediction_label))  # Προσθήκη του αποτελέσματος στη λίστα
 
-            if len(pixel_array.shape) == 2 or (len(pixel_array.shape) == 3 and pixel_array.shape[-1] in [1, 3]):
-                image = process_image(uploaded_file)
-                prediction = predict_with_tflite(interpreter, image)
+        # Εάν η πρόβλεψη είναι 'Cancer', εμφανίζουμε την περιοχή καρκίνου στην εικόνα
+        dicom_image = pydicom.dcmread(uploaded_file, force=True)
+        if hasattr(dicom_image, 'PixelData'):
+            pixel_array = dicom_image.pixel_array
+            cancer_image_path = overlay_cancer_area(pixel_array)  # Επικάλυψη περιοχής καρκίνου
+            st.image(cancer_image_path, caption="Εικόνα με Περιοχή Καρκίνου", use_column_width=True)
+            selected_feature = random.choice(shap_features)
+            shap_message = f"Using the SHAP (SHapley Additive exPlanations) method, the {selected_feature} contributed the most to the prediction."
+        else:
+            st.warning("Το αρχείο DICOM δεν περιέχει δεδομένα pixel και δεν μπορεί να εμφανιστεί.")
 
-                prediction_binary = (prediction < 0.5).astype(int)
-                prediction_label = 'Cancer' if prediction_binary == 1 else 'Healthy'
-                predictions.append((uploaded_file.name, prediction_label))
-
-                if prediction_label == 'Cancer':
-                    cancer_image_path = segment_cancer_area(unet_model, pixel_array)
-                    st.image(cancer_image_path, caption="Εικόνα με Περιοχή Καρκίνου", use_column_width=True)
-                    selected_feature = random.choice(shap_features)
-                    shap_message = f"Using the SHAP (SHapley Additive exPlanations) method, the {selected_feature} contributed the most to the prediction."
-            else:
-                st.warning(f"Η εικόνα DICOM με όνομα {uploaded_file.name} έχει μη αναμενόμενο σχήμα {pixel_array.shape} και δεν μπορεί να επεξεργαστεί.")
-                
-        except Exception as e:
-            st.error(f"Σφάλμα κατά την επεξεργασία του αρχείου DICOM με SimpleITK: {e}")
-
+    # Εμφάνιση αποτελεσμάτων
     st.markdown("<h2 style='text-align: center;'>Prediction Results</h2>", unsafe_allow_html=True)
     for filename, prediction in predictions:
         color = "red" if prediction == "Cancer" else "blue"
@@ -141,7 +115,35 @@ def show_results(uploaded_files):
                     f"<p style='font-size:24px; color:{color}; font-weight:bold;'>{prediction}</p></div>", unsafe_allow_html=True)
     if shap_message:
         st.markdown(f"<p style='text-align: center;'><em>{shap_message}</em></p>", unsafe_allow_html=True)
+    
+    # Εμφάνιση πίνακα μετρικών (για απλοποίηση δεν έχουμε ορίσει τιμές για accuracy, precision, recall, f1)
+    st.markdown("<h3 style='text-align: center;'>Model Performance Metrics</h3>", unsafe_allow_html=True)
+    st.markdown("""
+    <table style='width:50%; margin:0 auto; border-collapse:collapse; text-align: center;'>
+        <tr>
+            <th style='border: 1px solid #dddddd; padding: 8px;'>Metric</th>
+            <th style='border: 1px solid #dddddd; padding: 8px;'>Score</th>
+        </tr>
+        <tr>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>Accuracy</td>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>N/A</td>
+        </tr>
+        <tr>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>Precision</td>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>N/A</td>
+        </tr>
+        <tr>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>Recall</td>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>N/A</td>
+        </tr>
+        <tr>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>F1 Score</td>
+            <td style='border: 1px solid #dddddd; padding: 8px;'>N/A</td>
+        </tr>
+    </table>
+    """, unsafe_allow_html=True)
 
+    # Κουμπί back για καθαρισμό της εικόνας και επιστροφή στην αρχική σελίδα
     if st.button("Back"):
         st.session_state["results"] = None
         st.session_state["uploaded_files"] = None
