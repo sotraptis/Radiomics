@@ -41,6 +41,7 @@ def process_image(file):
         if not hasattr(dicom, 'PixelData') or dicom.PixelData is None:
             raise ValueError("Το αρχείο DICOM δεν περιέχει δεδομένα Pixel και δεν μπορεί να γίνει πρόβλεψη.")
 
+        # Ανάγνωση και κανονικοποίηση του pixel_array
         img = dicom.pixel_array
         st.write(f"Σχήμα pixel_array: {img.shape}")
 
@@ -57,8 +58,11 @@ def process_image(file):
         img = np.expand_dims(img, axis=0)  # Προσθήκη batch dimension
         return img
 
+    except ValueError as ve:
+        st.error(f"Σφάλμα: {ve}")
+        raise
     except Exception as e:
-        raise ValueError(f"Σφάλμα κατά την επεξεργασία του αρχείου DICOM: {e}")
+        raise ValueError(f"Άλλο σφάλμα κατά την επεξεργασία του αρχείου DICOM: {e}")
 
 # Εκτέλεση πρόβλεψης με το TFLite μοντέλο
 def predict_with_tflite(interpreter, input_data):
@@ -154,15 +158,4 @@ def show_results(uploaded_files):
         st.markdown(f"<div style='text-align: center;'><p style='font-size:18px;'>{filename}</p>"
                     f"<p style='font-size:24px; color:{color}; font-weight:bold;'>{prediction}</p></div>", unsafe_allow_html=True)
     if shap_message:
-        st.markdown(f"<p style='text-align: center;'><em>{shap_message}</em></p>", unsafe_allow_html=True)
-
-    if st.button("Back"):
-        st.session_state["results"] = None
-        st.session_state["uploaded_files"] = None
-        show_home_page()
-
-# Ροή της εφαρμογής
-if "results" not in st.session_state or st.session_state["results"] is None:
-    show_home_page()
-else:
-    show_results(st.session_state["uploaded_files"])
+        st.markdown(f"<p style='
