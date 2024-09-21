@@ -5,7 +5,7 @@ import pydicom
 import random
 import streamlit as st
 import matplotlib.pyplot as plt
-from pydicom.uid import ImplicitVRLittleEndian
+from pydicom.uid import ImplicitVRLittleEndian, ExplicitVRLittleEndian, DeflatedExplicitVRLittleEndian
 
 # Φορτώνουμε το U-Net μοντέλο
 @st.cache_resource
@@ -26,14 +26,30 @@ def load_tflite_model(model_path):
 model_path = './best_model_fold_1.tflite'
 interpreter = load_tflite_model(model_path)
 
-# Επεξεργασία της εικόνας DICOM
+# Επεξεργασία της εικόνας DICOM με έλεγχο του Transfer Syntax
 @st.cache_data
 def process_image(file):
     try:
         dicom = pydicom.dcmread(file, force=True)
 
-        # Χρήση του Pixel Array, ανεξάρτητα από τα υπόλοιπα μεταδεδομένα
-        img = dicom.pixel_array
+        # Έλεγχος και χειρισμός του Transfer Syntax UID
+        if 'TransferSyntaxUID' not in dicom.file_meta:
+            st.warning("Δεν βρέθηκε Transfer Syntax UID, χρησιμοποιείται το προεπιλεγμένο Implicit VR Little Endian.")
+            dicom.file_meta.TransferSyntaxUID = ImplicitVRLittleEndian
+
+        if dicom.file_meta.TransferSyntaxUID not in [ImplicitVRLittleEndian, ExplicitVRLittleEndian, DeflatedExplicitVRLittleEndian]:
+            raise ValueError(f"Το Transfer Syntax UID {dicom.file_meta.TransferSyntaxUID} δεν υποστηρίζεται.")
+
+        # Έλεγχος για την ύπαρξη δεδομένων Pixel
+        if not hasattr(dicom, 'PixelData'):
+            raise ValueError("Το αρχείο DICOM δεν περιέχει δεδομένα Pixel και δεν μπορεί να γίνει πρόβλεψη.")
+
+        # Λήψη του pixel_array
+        try:
+            img = dicom.pixel_array
+        except Exception as e:
+            raise ValueError(f"Αποτυχία απόκτησης pixel_array: {e}")
+
         st.write(f"Σχήμα pixel_array: {img.shape}")
 
         if len(img.shape) == 2:  # Αν είναι 2D εικόνα
@@ -109,6 +125,10 @@ def show_results(uploaded_files):
     for uploaded_file in uploaded_files:
         try:
             dicom_image = pydicom.dcmread(uploaded_file, force=True)
+
+            # Έλεγχος και χειρισμός του Transfer Syntax UID
+            if 'TransferSyntaxUID' not in dicom_image.file_meta:
+                dicom_image.file_meta.TransferSyntaxUID = ImplicitVRLittleEndian  # Προκαθορισμένο Transfer Syntax
 
             if hasattr(dicom_image, 'PixelData'):
                 pixel_array = dicom_image.pixel_array
