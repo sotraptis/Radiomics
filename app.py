@@ -158,4 +158,15 @@ def show_results(uploaded_files):
         st.markdown(f"<div style='text-align: center;'><p style='font-size:18px;'>{filename}</p>"
                     f"<p style='font-size:24px; color:{color}; font-weight:bold;'>{prediction}</p></div>", unsafe_allow_html=True)
     if shap_message:
-        st.markdown(f"<p style='
+        st.markdown(f"<p style='text-align: center;'><em>{shap_message}</em></p>", unsafe_allow_html=True)
+
+    if st.button("Back"):
+        st.session_state["results"] = None
+        st.session_state["uploaded_files"] = None
+        show_home_page()
+
+# Ροή της εφαρμογής
+if "results" not in st.session_state or st.session_state["results"] is None:
+    show_home_page()
+else:
+    show_results(st.session_state["uploaded_files"])
