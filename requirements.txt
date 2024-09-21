@@ -3,7 +3,3 @@ tensorflow-cpu
 pydicom
 numpy
 matplotlib
-SimpleITK
-
-
-
