@@ -5,7 +5,7 @@ import pydicom
 import random
 import streamlit as st
 import matplotlib.pyplot as plt
-from pydicom.uid import ImplicitVRLittleEndian, ExplicitVRLittleEndian, DeflatedExplicitVRLittleEndian
+from pydicom.uid import ImplicitVRLittleEndian
 
 # Φορτώνουμε το U-Net μοντέλο
 @st.cache_resource
@@ -26,7 +26,7 @@ def load_tflite_model(model_path):
 model_path = './best_model_fold_1.tflite'
 interpreter = load_tflite_model(model_path)
 
-# Επεξεργασία της εικόνας DICOM με έλεγχο του Transfer Syntax
+# Επεξεργασία της εικόνας DICOM
 @st.cache_data
 def process_image(file):
     try:
@@ -37,11 +37,10 @@ def process_image(file):
             st.warning("Δεν βρέθηκε Transfer Syntax UID, χρησιμοποιείται το προεπιλεγμένο Implicit VR Little Endian.")
             dicom.file_meta.TransferSyntaxUID = ImplicitVRLittleEndian
 
-        # Έλεγχος για ύπαρξη δεδομένων PixelData
+        # Προσπάθεια ανάγνωσης του Pixel Data
         if not hasattr(dicom, 'PixelData') or dicom.PixelData is None:
             raise ValueError("Το αρχείο DICOM δεν περιέχει δεδομένα Pixel και δεν μπορεί να γίνει πρόβλεψη.")
 
-        # Ανάγνωση και κανονικοποίηση του pixel_array
         img = dicom.pixel_array
         st.write(f"Σχήμα pixel_array: {img.shape}")
 
