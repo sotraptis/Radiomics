@@ -5,9 +5,9 @@ import pydicom
 import random
 import streamlit as st
 import matplotlib.pyplot as plt
-from pydicom.uid import ImplicitVRLittleEndian, ExplicitVRLittleEndian, DeflatedExplicitVRLittleEndian
+from pydicom.uid import ImplicitVRLittleEndian
 
-# Φορτώνουμε ένα προεκπαιδευμένο μοντέλο U-Net για segmentation
+# Φορτώνουμε το U-Net μοντέλο
 @st.cache_resource
 def load_unet_model():
     unet_model = tf.keras.applications.MobileNetV2(weights='imagenet', include_top=False, input_shape=(256, 256, 3))
@@ -15,64 +15,44 @@ def load_unet_model():
 
 unet_model = load_unet_model()
 
-# Χρησιμοποιούμε cache για τη φόρτωση του TFLite μοντέλου
+# Φορτώνουμε το TFLite μοντέλο
 @st.cache_resource
 def load_tflite_model(model_path):
     interpreter = tf.lite.Interpreter(model_path=model_path)
     interpreter.allocate_tensors()
     return interpreter
 
-# Ορισμός της σχετικής διαδρομής για το TFLite μοντέλο
+# Ορισμός διαδρομής για το TFLite μοντέλο
 model_path = './best_model_fold_1.tflite'
 interpreter = load_tflite_model(model_path)
 
-# Λειτουργία φόρτωσης και επεξεργασίας εικόνας DICOM με έλεγχο Transfer Syntax
+# Επεξεργασία της εικόνας DICOM
 @st.cache_data
 def process_image(file):
     try:
         dicom = pydicom.dcmread(file, force=True)
 
-        # Εκτύπωση μεταδεδομένων του DICOM αρχείου
-        st.write("DICOM metadata:")
-        st.write(dicom)
-
-        # Έλεγχος και χειρισμός του TransferSyntaxUID
-        if 'TransferSyntaxUID' in dicom.file_meta:
-            ts_uid = dicom.file_meta.TransferSyntaxUID
-            st.write(f"Transfer Syntax UID: {ts_uid}")
-        else:
-            st.write("Δεν βρέθηκε Transfer Syntax UID, χρησιμοποιείται το προεπιλεγμένο Implicit VR Little Endian.")
-            dicom.file_meta.TransferSyntaxUID = ImplicitVRLittleEndian
-        
-        # Έλεγχος για συμβατότητα με υποστηριζόμενα Transfer Syntax
-        if dicom.file_meta.TransferSyntaxUID not in [ImplicitVRLittleEndian, ExplicitVRLittleEndian, DeflatedExplicitVRLittleEndian]:
-            raise ValueError(f"Το Transfer Syntax UID {dicom.file_meta.TransferSyntaxUID} δεν υποστηρίζεται.")
-        
-        # Έλεγχος αν υπάρχει δεδομένο Pixel Data
-        if not hasattr(dicom, 'PixelData'):
-            raise ValueError("Το αρχείο DICOM δεν περιέχει δεδομένα Pixel και δεν μπορεί να γίνει πρόβλεψη.")
-
-        # Εναλλακτική μέθοδος απόκτησης του pixel_array
-        try:
-            img = dicom.pixel_array
-        except Exception as e:
-            raise ValueError(f"Αποτυχία απόκτησης pixel_array: {e}")
-
+        # Χρήση του Pixel Array, ανεξάρτητα από τα υπόλοιπα μεταδεδομένα
+        img = dicom.pixel_array
         st.write(f"Σχήμα pixel_array: {img.shape}")
 
-        if len(img.shape) == 2:  # Έλεγχος αν είναι 2D εικόνα
-            img = np.expand_dims(img, axis=-1)  # Προσθήκη άξονα καναλιού
-        img = (img - np.min(img)) / (np.max(img) - np.min(img))  # Κανονικοποίηση
-        img = tf.image.resize(img, (256, 256))  # Αλλαγή μεγέθους
-        if img.shape[-1] == 1:  # Αν η εικόνα έχει μόνο ένα κανάλι, επαναλαμβάνεται για να γίνει 3 κανάλια
+        if len(img.shape) == 2:  # Αν είναι 2D εικόνα
+            img = np.expand_dims(img, axis=-1)  # Προσθήκη καναλιού
+
+        # Κανονικοποίηση και αλλαγή μεγέθους
+        img = (img - np.min(img)) / (np.max(img) - np.min(img))
+        img = tf.image.resize(img, (256, 256))
+
+        if img.shape[-1] == 1:  # Αν έχει μόνο ένα κανάλι, επαναλαμβάνεται για να γίνει 3 κανάλια
             img = np.repeat(img, 3, axis=-1)
+
         img = np.expand_dims(img, axis=0)  # Προσθήκη batch dimension
         return img
 
     except Exception as e:
         raise ValueError(f"Σφάλμα κατά την επεξεργασία του αρχείου DICOM: {e}")
 
-# Συνάρτηση για την εκτέλεση πρόβλεψης με το TFLite μοντέλο
+# Εκτέλεση πρόβλεψης με το TFLite μοντέλο
 def predict_with_tflite(interpreter, input_data):
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
@@ -81,7 +61,7 @@ def predict_with_tflite(interpreter, input_data):
     output_data = interpreter.get_tensor(output_details[0]['index'])
     return output_data
 
-# Συνάρτηση για να κάνουμε segmentation με U-Net και να εμφανίσουμε τη σωστή περιοχή καρκίνου
+# Εμφάνιση της περιοχής καρκίνου στην εικόνα DICOM
 def segment_cancer_area(unet_model, dicom_image):
     if len(dicom_image.shape) == 2:
         dicom_image = np.expand_dims(dicom_image, axis=-1)  # Προσθήκη καναλιού για grayscale
@@ -129,10 +109,6 @@ def show_results(uploaded_files):
     for uploaded_file in uploaded_files:
         try:
             dicom_image = pydicom.dcmread(uploaded_file, force=True)
-
-            # Έλεγχος και χειρισμός του Transfer Syntax UID
-            if 'TransferSyntaxUID' not in dicom_image.file_meta:
-                dicom_image.file_meta.TransferSyntaxUID = ImplicitVRLittleEndian  # Προκαθορισμένο Transfer Syntax
 
             if hasattr(dicom_image, 'PixelData'):
                 pixel_array = dicom_image.pixel_array
