@@ -29,7 +29,7 @@ interpreter = load_tflite_model(model_path)
 @st.cache_data
 def process_image(file):
     try:
-        # Ανάγνωση DICOM αρχείου με SimpleITK
+        # Ανάγνωση μεμονωμένου DICOM αρχείου με SimpleITK
         dicom_image = sitk.ReadImage(file)
         img_array = sitk.GetArrayFromImage(dicom_image)
         
