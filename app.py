@@ -32,6 +32,10 @@ def process_image(file):
     try:
         dicom = pydicom.dcmread(file, force=True)
 
+        # Εκτύπωση μεταδεδομένων του DICOM αρχείου
+        st.write("DICOM metadata:")
+        st.write(dicom)
+
         # Έλεγχος και χειρισμός του TransferSyntaxUID
         if 'TransferSyntaxUID' in dicom.file_meta:
             ts_uid = dicom.file_meta.TransferSyntaxUID
@@ -48,7 +52,14 @@ def process_image(file):
         if not hasattr(dicom, 'PixelData'):
             raise ValueError("Το αρχείο DICOM δεν περιέχει δεδομένα Pixel και δεν μπορεί να γίνει πρόβλεψη.")
 
-        img = dicom.pixel_array
+        # Εναλλακτική μέθοδος απόκτησης του pixel_array
+        try:
+            img = dicom.pixel_array
+        except Exception as e:
+            raise ValueError(f"Αποτυχία απόκτησης pixel_array: {e}")
+
+        st.write(f"Σχήμα pixel_array: {img.shape}")
+
         if len(img.shape) == 2:  # Έλεγχος αν είναι 2D εικόνα
             img = np.expand_dims(img, axis=-1)  # Προσθήκη άξονα καναλιού
         img = (img - np.min(img)) / (np.max(img) - np.min(img))  # Κανονικοποίηση
@@ -125,7 +136,7 @@ def show_results(uploaded_files):
 
             if hasattr(dicom_image, 'PixelData'):
                 pixel_array = dicom_image.pixel_array
-                print(f"Pixel Array Shape: {pixel_array.shape}")
+                st.write(f"Pixel Array Shape: {pixel_array.shape}")
 
                 if len(pixel_array.shape) == 2 or (len(pixel_array.shape) == 3 and pixel_array.shape[-1] in [1, 3]):
                     image = process_image(uploaded_file)
