@@ -43,7 +43,7 @@ shap_features = [
 # Συνάρτηση για εμφάνιση της αρχικής σελίδας
 def show_home_page():
     st.markdown("<div style='text-align: left;'>", unsafe_allow_html=True)
-    st.image('static/DALL·E 2024-09-27 12.12.53 - Another innovative and dynamic logo for R.A.P.T.I.S. (Radiomics Assisted Prognostication and Targeting Intelligence System), focusing on lung cancer p.webp', width=120)
+    st.image('static/raptis.webp', width=140)
     st.markdown("<h1>R.A.P.T.I.S.</h1>", unsafe_allow_html=True)
     st.markdown("<h2>Radiomics Assisted Prognostication and Targeting Intelligence System</h2>", unsafe_allow_html=True)
     st.image('static/test.gif', use_column_width=False)
