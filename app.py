@@ -43,7 +43,7 @@ shap_features = [
 # Συνάρτηση για εμφάνιση της αρχικής σελίδας
 def show_home_page():
     st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-    st.image('static/DALL.webp', width=120)
+    st.image('static/DALL.webp', use_column_width=False)
     st.markdown("<h1>R.A.P.T.I.S.</h1>", unsafe_allow_html=True)
     st.markdown("<h2>Radiomics Assisted Prognostication and Targeting Intelligence System</h2>", unsafe_allow_html=True)
     st.image('static/test.gif', use_column_width=False)
