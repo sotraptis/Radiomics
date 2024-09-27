@@ -42,8 +42,9 @@ shap_features = [
 ]
 # Συνάρτηση για εμφάνιση της αρχικής σελίδας
 def show_home_page():
+    # Centering the image
     st.markdown("""
-        <div style='display: flex; justify-content: flex-end;'>
+        <div style='text-align: center;'>
             <img src='static/raptis2.webp' width='160'>
         </div>
     """, unsafe_allow_html=True)
@@ -52,7 +53,6 @@ def show_home_page():
     st.markdown("<h2>Radiomics Assisted Prognostication and Targeting Intelligence System</h2>", unsafe_allow_html=True)
     st.image('static/test.gif', use_column_width=False)
     uploaded_files = st.file_uploader("Upload DICOM files", type=["dcm"], accept_multiple_files=True)
-
 
     
     if uploaded_files and st.button("Upload and Predict"):
