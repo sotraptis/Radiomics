@@ -44,8 +44,8 @@ shap_features = [
 def show_home_page():
     st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
     st.image('static/DALL.webp', width=120)
-    st.markdown("<h1>R.A.P.T.</h1>", unsafe_allow_html=True)
-    st.markdown("<h2>Radiomics Assisted Prognostication and Theragnostics system</h2>", unsafe_allow_html=True)
+    st.markdown("<h1>R.A.P.T.I.S.</h1>", unsafe_allow_html=True)
+    st.markdown("<h2>Radiomics Assisted Prognostication and Targeting Intelligence System</h2>", unsafe_allow_html=True)
     st.image('static/test.gif', use_column_width=False)
     st.markdown("</div>", unsafe_allow_html=True)
     uploaded_files = st.file_uploader("Upload DICOM files", type=["dcm"], accept_multiple_files=True)
