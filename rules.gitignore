@@ -1,0 +1,26 @@
+
+# Εξαίρεση φάκελων που δημιουργούνται αυτόματα
+build/
+dist/
+
+# Εξαίρεση του φάκελου virtual environment
+venv/
+.env/
+
+# Εξαίρεση αρχείων δεδομένων
+datasets/
+models/
+
+# Εξαίρεση προσωρινών αρχείων από IDEs
+.vscode/
+.idea/
+
+# Εξαίρεση bytecode αρχείων Python
+__pycache__/
+*.py[cod]
+
+# Εξαίρεση αρχείων καταγραφής (log files)
+*.log
+
+# Εξαίρεση κρυφών αρχείων συστήματος σε macOS
+.DS_Store
